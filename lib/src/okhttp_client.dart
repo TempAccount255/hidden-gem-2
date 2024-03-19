@@ -1,7 +1,6 @@
-import 'dart:isolate';
+import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:async/async.dart';
 import 'package:http/http.dart';
 import 'package:jni/jni.dart';
 
@@ -9,6 +8,7 @@ import 'jni/jni_bindings.dart';
 
 class OkhttpClient extends BaseClient {
   bool _isClosed = false;
+  final _kotlinBridge = KotlinBridge();
 
   @override
   Future<StreamedResponse> send(BaseRequest request) async {
@@ -17,94 +17,53 @@ class OkhttpClient extends BaseClient {
           'HTTP request failed. Client is already closed.', request.url);
     }
 
-    final receivePort = ReceivePort();
-    final events = StreamQueue<dynamic>(receivePort);
+    final client = OkHttpClient()
+        .newBuilder()
+        .followRedirects(request.followRedirects)
+        .build();
 
-    await Isolate.spawn(_executeBackgroundHttpRequest, (
-      url: request.url.toString(),
-      method: request.method,
-      headers: request.headers,
-      body: await request.finalize().toBytes(),
-      followRedirects: request.followRedirects,
-      sendPort: receivePort.sendPort,
-    ));
+    final builder = Request_Builder();
 
-    final statusCode = await events.next as int;
-    final reasonPhrase = await events.next as String;
-    final responseHeaders = await events.next as Map<String, String>;
-    final isRedirect = await events.next as bool;
+    builder.url1(request.url.toString().toJString());
 
-    Stream<List<int>> responseBodyStream(Stream<dynamic> events) async* {
-      try {
-        await for (final event in events) {
-          if (event is List<int>) {
-            yield event;
-          } else if (event is ClientException) {
-            throw event;
-          } else if (event == null) {
-            return;
-          }
-        }
-      } finally {
-        receivePort.close();
+    request.headers.forEach(
+        (key, value) => builder.header(key.toJString(), value.toJString()));
+
+    builder.method(request.method.toJString(),
+        _initRequestBody(request.method, await request.finalize().toBytes()));
+
+    final call = client.newCall(builder.build());
+
+    final response = await _kotlinBridge.executeAsync(call);
+
+    final statusCode = response.code();
+    final reasonPhrase = response.message().toDartString(releaseOriginal: true);
+    final responseHeaders = _responseHeaders(response.headers1());
+    final isRedirect = response.isRedirect();
+
+    Stream<List<int>> responseBodyStream() async* {
+      const bufferSize = 4 * 1024;
+      final bytesArray = JArray(jbyte.type, bufferSize);
+      final bodyStream = response.body().source();
+
+      while (true) {
+        final bytesCount = bodyStream.read(bytesArray);
+        if (bytesCount == -1) break;
+        yield bytesArray.toUint8List(length: bytesCount);
       }
+
+      client.release();
+      builder.release();
+      response.release();
+      call.release();
     }
 
-    return StreamedResponse(responseBodyStream(events.rest), statusCode,
+    return StreamedResponse(responseBodyStream(), statusCode,
         isRedirect: isRedirect,
         contentLength: _contentLength(responseHeaders),
         request: request,
         headers: responseHeaders,
         reasonPhrase: reasonPhrase);
-  }
-
-  void _executeBackgroundHttpRequest(
-      ({
-        String url,
-        String method,
-        Map<String, String> headers,
-        Uint8List body,
-        bool followRedirects,
-        SendPort sendPort
-      }) args) {
-    final client = OkHttpClient()
-        .newBuilder()
-        .followRedirects(args.followRedirects)
-        .build();
-
-    final builder = Request_Builder();
-
-    builder.url1(args.url.toString().toJString());
-
-    args.headers.forEach(
-        (key, value) => builder.header(key.toJString(), value.toJString()));
-
-    builder.method(
-        args.method.toJString(), _initRequestBody(args.method, args.body));
-
-    final response = client.newCall(builder.build()).execute();
-
-    args.sendPort.send(response.code());
-    args.sendPort.send(response.message().toDartString(releaseOriginal: true));
-    args.sendPort.send(_responseHeaders(response.headers1()));
-    args.sendPort.send(response.isRedirect());
-
-    const bufferSize = 4 * 1024;
-    final bytesArray = JArray(jbyte.type, bufferSize);
-    final responseBodyStream = response.body().source();
-
-    try {
-      while (true) {
-        final bytesCount = responseBodyStream.read(bytesArray);
-        if (bytesCount == -1) break;
-
-        args.sendPort.send(bytesArray.toUint8List(length: bytesCount));
-      }
-    } catch (e) {
-      args.sendPort.send(ClientException(e.toString()));
-    }
-
-    args.sendPort.send(null);
   }
 
   int? _contentLength(Map<String, String> headers) {
@@ -153,6 +112,7 @@ class OkhttpClient extends BaseClient {
   @override
   void close() {
     _isClosed = true;
+    _kotlinBridge.release();
     super.close();
   }
 }

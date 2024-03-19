@@ -10,11 +10,13 @@ import 'package:flutter_okhttp/flutter_okhttp.dart';
 import 'package:http/http.dart';
 import 'package:http/io_client.dart';
 import 'package:http_image_provider/http_image_provider.dart';
+import 'package:jni/jni.dart';
 import 'package:provider/provider.dart';
 
 import 'book.dart';
 
 void main() {
+  Jni.initDLApi();
   final Client httpClient;
   if (Platform.isAndroid) {
     httpClient = OkhttpClient();

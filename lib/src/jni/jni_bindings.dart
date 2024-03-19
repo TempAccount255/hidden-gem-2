@@ -21,6 +21,78 @@ import "dart:ffi" as ffi;
 import "package:jni/internal_helpers_for_jnigen.dart";
 import "package:jni/jni.dart" as jni;
 
+/// from: KotlinBridge
+class KotlinBridge extends jni.JObject {
+  @override
+  late final jni.JObjType<KotlinBridge> $type = type;
+
+  KotlinBridge.fromRef(
+    jni.JObjectPtr ref,
+  ) : super.fromRef(ref);
+
+  static final _class = jni.Jni.findJClass(r"KotlinBridge");
+
+  /// The type which includes information such as the signature of this class.
+  static const type = $KotlinBridgeType();
+  static final _id_new0 =
+      jni.Jni.accessors.getMethodIDOf(_class.reference, r"<init>", r"()V");
+
+  /// from: public void <init>()
+  /// The returned object must be released after use, by calling the [release] method.
+  factory KotlinBridge() {
+    return KotlinBridge.fromRef(jni.Jni.accessors
+        .newObjectWithArgs(_class.reference, _id_new0, []).object);
+  }
+
+  static final _id_executeAsync = jni.Jni.accessors.getMethodIDOf(
+      _class.reference,
+      r"executeAsync",
+      r"(Lokhttp3/Call;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;");
+
+  /// from: public final java.lang.Object executeAsync(okhttp3.Call call, kotlin.coroutines.Continuation continuation)
+  /// The returned object must be released after use, by calling the [release] method.
+  Future<Response> executeAsync(
+    Call call,
+  ) async {
+    final $p = ReceivePort();
+    final $c =
+        jni.JObject.fromRef(ProtectedJniExtensions.newPortContinuation($p));
+    jni.Jni.accessors.callMethodWithArgs(reference, _id_executeAsync,
+        jni.JniCallType.objectType, [call.reference, $c.reference]).object;
+    final $o = jni.JObjectPtr.fromAddress(await $p.first);
+    final $k = const $ResponseType().getClass().reference;
+    if (!jni.Jni.env.IsInstanceOf($o, $k)) {
+      throw "Failed";
+    }
+    return const $ResponseType().fromRef($o);
+  }
+}
+
+final class $KotlinBridgeType extends jni.JObjType<KotlinBridge> {
+  const $KotlinBridgeType();
+
+  @override
+  String get signature => r"LKotlinBridge;";
+
+  @override
+  KotlinBridge fromRef(jni.JObjectPtr ref) => KotlinBridge.fromRef(ref);
+
+  @override
+  jni.JObjType get superType => const jni.JObjectType();
+
+  @override
+  final superCount = 1;
+
+  @override
+  int get hashCode => ($KotlinBridgeType).hashCode;
+
+  @override
+  bool operator ==(Object other) {
+    return other.runtimeType == ($KotlinBridgeType) &&
+        other is $KotlinBridgeType;
+  }
+}
+
 /// from: okhttp3.OkHttpClient$Builder
 class OkHttpClient_Builder extends jni.JObject {
   @override

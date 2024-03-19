@@ -3,6 +3,8 @@ android_sdk_config:
   add_gradle_deps: true
   android_example: 'example/'
 
+suspend_fun_to_async: true
+
 output:
   bindings_type: dart_only
   dart:
@@ -10,6 +12,7 @@ output:
     structure: 'single_file'
 
 classes:
+  - 'KotlinBridge'
   - 'okhttp3.OkHttpClient'
   - 'okhttp3.Request'
   - 'okhttp3.Response'
